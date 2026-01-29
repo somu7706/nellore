@@ -6,7 +6,7 @@ import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { ScrollArea } from '../components/ui/scroll-area';
-import { Send, Mic, MicOff, Volume2, Loader2, Bot, User, AlertCircle } from 'lucide-react';
+import { Send, Mic, MicOff, Volume2, Loader2, Bot, User, AlertCircle, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 const Assistant = () => {
@@ -63,12 +63,27 @@ const Assistant = () => {
       console.error('Chat error:', err);
       const errorMessage = err.response?.data?.detail || 'Failed to get response';
       toast.error(errorMessage);
-      setMessages(prev => [...prev, { 
-        role: 'assistant', 
-        content: t('common.error') 
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: t('common.error')
       }]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const clearChat = async () => {
+    if (messages.length === 0) return;
+
+    if (window.confirm('Are you sure you want to clear the entire chat history? This cannot be undone.')) {
+      try {
+        await api.delete('/chat/history');
+        setMessages([]);
+        toast.success('Chat history cleared');
+      } catch (err) {
+        console.error('Failed to clear chat:', err);
+        toast.error('Failed to clear chat history');
+      }
     }
   };
 
@@ -115,11 +130,11 @@ const Assistant = () => {
     try {
       const formData = new FormData();
       formData.append('audio', audioBlob, 'recording.wav');
-      
+
       const response = await api.post('/voice/stt', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
-      
+
       const transcribedText = response.data.data.text;
       if (transcribedText) {
         setInput(transcribedText);
@@ -175,9 +190,23 @@ const Assistant = () => {
     <Layout>
       <div className="max-w-3xl mx-auto h-[calc(100vh-12rem)]" data-testid="assistant-page">
         {/* Header */}
-        <div className="mb-4">
-          <h1 className="text-3xl font-bold text-foreground">{t('assistant.title')}</h1>
-          <p className="text-muted-foreground mt-1">{t('assistant.subtitle')}</p>
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-foreground">{t('assistant.title')}</h1>
+            <p className="text-muted-foreground mt-1">{t('assistant.subtitle')}</p>
+          </div>
+          {messages.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={clearChat}
+              className="text-muted-foreground hover:text-destructive hover:border-destructive transition-colors rounded-full px-4"
+              data-testid="clear-chat-btn"
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Clear Chat
+            </Button>
+          )}
         </div>
 
         {/* Chat Container */}
@@ -220,11 +249,10 @@ const Assistant = () => {
                       </div>
                     )}
                     <div
-                      className={`max-w-[80%] rounded-2xl p-4 ${
-                        message.role === 'user'
+                      className={`max-w-[80%] rounded-2xl p-4 ${message.role === 'user'
                           ? 'bg-primary text-primary-foreground rounded-br-md'
                           : 'bg-muted rounded-bl-md'
-                      }`}
+                        }`}
                     >
                       <div className="text-sm space-y-1">
                         {formatMessage(message.content)}

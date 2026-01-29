@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import axios from 'axios';
 
 const API_URL = `${process.env.REACT_APP_BACKEND_URL}/api`;
+console.log("AuthContext: Initializing with API_URL:", API_URL);
 
 const AuthContext = createContext(null);
 
@@ -52,7 +53,10 @@ export const AuthProvider = ({ children }) => {
   const api = useMemo(() => {
     const instance = axios.create({
       baseURL: API_URL,
-      headers: { 'Content-Type': 'application/json' }
+      headers: {
+        'Content-Type': 'application/json',
+        'bypass-tunnel-reminder': 'true'
+      }
     });
 
     // Request interceptor
@@ -146,7 +150,7 @@ export const AuthProvider = ({ children }) => {
       setError(message);
       throw new Error(message);
     }
-  }, [setStoredTokens]);
+  }, [api, setStoredTokens]);
 
   const googleLogin = useCallback(async (idToken) => {
     setError(null);
@@ -161,7 +165,7 @@ export const AuthProvider = ({ children }) => {
       setError(message);
       throw new Error(message);
     }
-  }, [setStoredTokens]);
+  }, [api, setStoredTokens]);
 
   const requestOtp = useCallback(async (identifier) => {
     setError(null);
@@ -173,7 +177,7 @@ export const AuthProvider = ({ children }) => {
       setError(message);
       throw new Error(message);
     }
-  }, []);
+  }, [api]);
 
   const verifyOtp = useCallback(async (identifier, otp) => {
     setError(null);
@@ -188,7 +192,7 @@ export const AuthProvider = ({ children }) => {
       setError(message);
       throw new Error(message);
     }
-  }, [setStoredTokens]);
+  }, [api, setStoredTokens]);
 
   const register = useCallback(async (userData) => {
     setError(null);
@@ -203,7 +207,7 @@ export const AuthProvider = ({ children }) => {
       setError(message);
       throw new Error(message);
     }
-  }, [setStoredTokens]);
+  }, [api, setStoredTokens]);
 
   const logout = useCallback(async () => {
     try {

@@ -11,7 +11,7 @@ class LlmChat:
     def __init__(self, api_key, session_id, system_message):
         self.api_key = api_key
         self.system_message = system_message
-        self.model_name = "gemini-2.0-flash" 
+        self.model_name = "gemini-1.5-flash" 
         
         # Configure the API key
         if api_key:

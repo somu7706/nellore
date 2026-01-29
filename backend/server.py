@@ -26,7 +26,7 @@ import time
 import random
 
 ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / '.env')
+load_dotenv(ROOT_DIR / '.env', override=True)
 
 # MongoDB connection
 mongo_url = os.environ.get('MONGO_URI', os.environ.get('MONGO_URL', 'mongodb://localhost:27017'))
@@ -120,75 +120,7 @@ class UserUpdate(BaseModel):
     lat: Optional[float] = None
     lng: Optional[float] = None
 
-class NotificationService:
-    @staticmethod
-    def send_otp(identifier: str, otp: str):
-        if "@" in identifier:
-            # Email Flow
-            NotificationService.send_email_otp(identifier, otp)
-        else:
-            # SMS Flow (Assume it's a phone number if no @)
-            NotificationService.send_sms_otp(identifier, otp)
-
-    @staticmethod
-    def send_email_otp(email: str, otp: str):
-        smtp_host = os.environ.get("SMTP_HOST")
-        smtp_port = int(os.environ.get("SMTP_PORT", 587))
-        smtp_user = os.environ.get("SMTP_USER")
-        smtp_pass = os.environ.get("SMTP_PASSWORD")
-
-        if not all([smtp_host, smtp_user, smtp_pass]):
-            logger.warning(f"SMTP not configured. OTP for {email}: {otp}")
-            return
-
-        try:
-            msg = MIMEMultipart()
-            msg['From'] = f"VitalWave <{smtp_user}>"
-            msg['To'] = email
-            msg['Subject'] = f"{otp} is your VitalWave verification code"
-
-            body = f"""
-            Hello,
-            
-            Your verification code for VitalWave is: {otp}
-            
-            This code will expire in 5 minutes.
-            
-            If you did not request this code, please ignore this email.
-            """
-            msg.attach(MIMEText(body, 'plain'))
-
-            with smtplib.SMTP(smtp_host, smtp_port) as server:
-                server.starttls()
-                server.login(smtp_user, smtp_pass)
-                server.send_message(msg)
-            
-            logger.info(f"OTP Email sent to {email}")
-        except Exception as e:
-            logger.error(f"Failed to send OTP email: {e}")
-
-    @staticmethod
-    def send_sms_otp(phone: str, otp: str):
-        # Placeholder for Twilio/SNS
-        account_sid = os.environ.get("TWILIO_ACCOUNT_SID")
-        auth_token = os.environ.get("TWILIO_AUTH_TOKEN")
-        from_number = os.environ.get("TWILIO_FROM_NUMBER")
-
-        if not all([account_sid, auth_token, from_number]) or "your_token" in auth_token:
-            logger.warning(f"Twilio not configured. OTP for {phone}: {otp}")
-            return
-
-        try:
-            from twilio.rest import Client
-            client = Client(account_sid, auth_token)
-            message = client.messages.create(
-                body=f"Your VitalWave verification code is: {otp}",
-                from_=from_number,
-                to=phone
-            )
-            logger.info(f"OTP SMS sent to {phone}: {message.sid}")
-        except Exception as e:
-            logger.error(f"Failed to send OTP SMS: {e}")
+# Notification Service consolidated below at line 380
 
 class TokenResponse(BaseModel):
     access_token: str
@@ -223,6 +155,25 @@ class LinkUpload(BaseModel):
 class TTSRequest(BaseModel):
     text: str
     lang: str = "en"
+
+class UsernameUpdate(BaseModel):
+    username: str
+
+class PasswordChange(BaseModel):
+    current_password: str
+    new_password: str
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+class VerifyResetCodeRequest(BaseModel):
+    email: EmailStr
+    code: str
+
+class ResetPasswordRequest(BaseModel):
+    email: EmailStr
+    code: str
+    new_password: str
 
 # ============== HELPERS ==============
 
@@ -271,7 +222,48 @@ MEDICAL_KEYWORDS = [
     'pharmacy', 'clinic', 'emergency', 'ambulance', 'nurse', 'patient', 'care', 'wellness',
     'bp', 'sugar', 'cholesterol', 'hemoglobin', 'thyroid', 'vaccine', 'immunity',
     'tablet', 'capsule', 'syrup', 'injection', 'dosage', 'side effect', 'precaution',
-    'checkup', 'appointment', 'specialist', 'consultation', 'referral'
+    'checkup', 'appointment', 'specialist', 'consultation', 'referral',
+    # Expanded health/diet/wellness keywords
+    'flu', 'malaria', 'dengue', 'hypertension', 'obesity', 'workout', 'yoga', 'calorie', 
+    'food', 'eat', 'sleep', 'stress', 'mental', 'anxiety', 'depression', 'skin', 'rash', 
+    'stomach', 'digestion', 'heartburn', 'acid', 'vomit', 'nausea', 'dizzy', 'fatigue', 
+    'tired', 'ache', 'sore', 'infection', 'virus', 'bacteria', 'covid', 'corona', 
+    'mask', 'sanitizer', 'gym', 'fitness', 'weight', 'loss', 'gain', 'protein', 'carb', 
+    'fat', 'mineral', 'water', 'hydration', 'lifestyle', 'habit', 'routine',
+    'ayurveda', 'ayurvedic', 'homeopathy', 'natural', 'remedy', 'cure', 'prevention',
+    'morning', 'night', 'daily', 'hair', 'teeth', 'dental', 'vision', 'eyes',
+    'precuation', 'ferver', 'sysmptom', 'symptom', 'treatment', 'tablet', 'pill', # Common typos/variations
+    'how to', 'what are', 'tips', 'advice', 'help', 'symptoms', 'medicine', 'medicines',
+    'hospital','medicine','medicines','medical','health','healthcare','clinic','pharmacy',
+'disease','diseases','symptom','symptoms','sign','diagnosis','treatment','therapy','cure',
+'doctor','physician','surgeon','specialist','consultation','appointment','referral',
+'nurse','patient','care','wellness','emergency','ambulance','icu','ward',
+'lab','laboratory','test','tests','blood','urine','report','xray','x-ray','scan','mri','ct',
+'ultrasound','ecg','ekg','eeg','echo','biopsy','screening','monitoring',
+'prescription','drug','drugs','tablet','tablets','pill','pills','capsule','capsules',
+'syrup','injection','dosage','insulin','antibiotic','antiviral','antifungal','steroid',
+'pain','painkiller','fever','cold','cough','headache','migraine','injury','wound','burn',
+'surgery','operation','fracture','sprain','therapy','rehab',
+'diabetes','cancer','heart','cardiac','bp','pressure','hypertension','cholesterol',
+'kidney','renal','liver','hepatic','lung','pulmonary','brain','neuro','bone','muscle','joint',
+'asthma','arthritis','stroke','paralysis','epilepsy','anemia','jaundice','tb','tuberculosis',
+'pneumonia','infection','virus','bacteria','covid','corona','flu','malaria','dengue',
+'allergy','rash','itching','swelling','inflammation','vomit','vomiting','nausea','diarrhea',
+'constipation','stomach','digestion','acid','heartburn','ulcer',
+'mental','mental health','stress','anxiety','depression','panic','sleep','insomnia',
+'diet','nutrition','food','eat','calorie','protein','carb','fat','vitamin','mineral',
+'supplement','water','hydration','exercise','workout','gym','fitness','yoga','weight',
+'loss','gain','bmi','lifestyle','habit','routine',
+'pregnancy','pregnant','delivery','menstrual','periods','fertility','child','baby','vaccine',
+'immunization','immunity',
+'first aid','cpr','rescue','trauma','accident','bleeding','bandage','shock','overdose',
+'ayurveda','ayurvedic','homeopathy','naturopathy','herbal','natural','remedy','prevention',
+'checkup','followup','precaution','side effect','safety',
+'how to','what is','tips','advice','help','is it safe','can i take',
+'feaver','ferver','diabetis','canser','hart','kidny','docter','medison','hospitel',
+'hedache','stomoch','nausia','pregnent','vaccin','injecion','sysmptom','precuation',
+'how to','what are','tips','advice','help','symptoms','medicine','medicines'
+
 ]
 
 def is_medical_query(text: str) -> bool:
@@ -361,7 +353,6 @@ GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")
 class NotificationService:
     @staticmethod
     def is_mobile(identifier: str) -> bool:
-        # Basic check for mobile number (digits and optional plus)
         return re.match(r'^\+?[1-9]\d{1,14}$', identifier) is not None
 
     @staticmethod
@@ -370,7 +361,7 @@ class NotificationService:
         token = os.environ.get("TWILIO_AUTH_TOKEN")
         from_number = os.environ.get("TWILIO_FROM_NUMBER")
         
-        if sid and token and from_number:
+        if sid and token and from_number and "your_token" not in token:
             try:
                 client = TwilioClient(sid, token)
                 client.messages.create(body=body, from_=from_number, to=to_number)
@@ -380,15 +371,11 @@ class NotificationService:
                 logger.error(f"Failed to send SMS: {e}")
                 return False
         else:
-            logger.warning("Twilio credentials missing. SMS simulated.")
+            logger.warning(f"Twilio not configured. SMS simulated for {to_number}: {body}")
             return True
 
     @staticmethod
     def send_email(to_email: str, subject: str, body: str):
-        import smtplib
-        from email.mime.text import MIMEText
-        from email.mime.multipart import MIMEMultipart
-
         smtp_host = os.environ.get("SMTP_HOST")
         smtp_port = int(os.environ.get("SMTP_PORT", 587))
         smtp_user = os.environ.get("SMTP_USER")
@@ -396,42 +383,43 @@ class NotificationService:
 
         if smtp_host and smtp_user and smtp_password:
             try:
-                print(f"Connecting to SMTP: {smtp_host}:{smtp_port} as {smtp_user}...")
-                
                 msg = MIMEMultipart()
-                msg['From'] = smtp_user
+                msg['From'] = f"VitalWave <{smtp_user}>"
                 msg['To'] = to_email
                 msg['Subject'] = subject
                 msg.attach(MIMEText(body, 'plain'))
 
-                server = smtplib.SMTP(smtp_host, smtp_port)
-                server.set_debuglevel(1) # Enable verbose output for debugging
-                server.starttls()
-                server.login(smtp_user, smtp_password)
-                text = msg.as_string()
-                server.sendmail(smtp_user, to_email, text)
-                server.quit()
+                with smtplib.SMTP(smtp_host, smtp_port) as server:
+                    server.starttls()
+                    server.login(smtp_user, smtp_password)
+                    server.send_message(msg)
                 
                 logger.info(f"Email sent successfully to {to_email}")
-                print(f"Email sent successfully to {to_email}")
                 return True
             except Exception as e:
-                logger.error(f"Failed to send Email. Error: {e}")
-                print(f"SMTP ERROR: {e}")
-                import traceback
-                traceback.print_exc()
+                logger.error(f"Failed to send Email to {to_email}: {e}")
                 return False
         else:
-            logger.warning("SMTP credentials missing or incomplete. Email simulated.")
+            logger.warning(f"SMTP not configured. Email simulated for {to_email}: {subject}")
             return True
 
     @staticmethod
     def send_otp(identifier: str, otp: str):
-        message = f"Your VitalWave verification code is: {otp}"
-        if NotificationService.is_mobile(identifier):
-            return NotificationService.send_sms(identifier, message)
+        is_mobile = NotificationService.is_mobile(identifier)
+        if is_mobile:
+            body = f"Your VitalWave verification code is: {otp}. Valid for 5 minutes."
+            return NotificationService.send_sms(identifier, body)
         else:
-            return NotificationService.send_email(identifier, "VitalWave Verification Code", message)
+            body = f"""
+            Hello,
+            
+            Your verification code for VitalWave is: {otp}
+            
+            This code will expire in 5 minutes.
+            
+            If you did not request this code, please ignore this email.
+            """
+            return NotificationService.send_email(identifier, "VitalWave Verification Code", body)
 
 class GoogleAuth(BaseModel):
     id_token: str
@@ -494,8 +482,11 @@ async def google_login(auth_data: GoogleAuth):
             user=user_response(user)
         )
     except Exception as e:
-        logger.error(f"Google login failed: {e}")
-        raise HTTPException(status_code=400, detail="Invalid Google token")
+        logger.error(f"Google login failed: {str(e)}")
+        # Log more info if possible
+        if "id_token" in auth_data.dict():
+             logger.error(f"Token length: {len(auth_data.id_token)}")
+        raise HTTPException(status_code=400, detail=f"Invalid Google token: {str(e)}")
 
 @api_router.post("/auth/otp/request")
 async def request_otp(data: OtpRequest):
@@ -510,7 +501,10 @@ async def request_otp(data: OtpRequest):
     )
     
     # Send Notification
-    NotificationService.send_otp(data.identifier, otp)
+    success = NotificationService.send_otp(data.identifier, otp)
+    if not success:
+        logger.error(f"Failed to send OTP to {data.identifier}. Check SMTP/Twilio configuration.")
+        raise HTTPException(status_code=500, detail="Failed to deliver OTP. Please check your contact details or try again later.")
     
     # Log for dev/demo purposes
     logger.info(f"OTP for {data.identifier}: {otp}")
@@ -624,6 +618,140 @@ async def update_me(update: UserUpdate, user: dict = Depends(get_current_user)):
         await db.users.update_one({"id": user["id"]}, {"$set": update_data})
     updated = await db.users.find_one({"id": user["id"]}, {"_id": 0, "password_hash": 0})
     return {"data": updated}
+
+# Rate limiting for password change
+PASSWORD_CHANGE_LIMITS = {}
+
+@api_router.patch("/user/username")
+async def update_username(data: UsernameUpdate, user: dict = Depends(get_current_user)):
+    username = data.username
+    if len(username) < 4:
+        raise HTTPException(status_code=400, detail="Username must be at least 4 characters")
+    if " " in username:
+        raise HTTPException(status_code=400, detail="Username cannot contain spaces")
+    if not re.match(r"^[a-zA-Z0-9_]+$", username):
+        raise HTTPException(status_code=400, detail="Username can only contain letters, numbers, and underscores")
+    
+    # Check uniqueness
+    existing = await db.users.find_one({"username": username})
+    if existing and existing["id"] != user["id"]:
+        raise HTTPException(status_code=400, detail="Username already taken")
+    
+    await db.users.update_one({"id": user["id"]}, {"$set": {"username": username}})
+    return {"message": "Username updated successfully", "username": username}
+
+@api_router.post("/user/change-password")
+async def change_password(data: PasswordChange, user: dict = Depends(get_current_user)):
+    # Rate limiting
+    now = time.time()
+    last_attempt = PASSWORD_CHANGE_LIMITS.get(user["id"], 0)
+    if now - last_attempt < 60:
+        raise HTTPException(status_code=429, detail="Please wait 1 minute before trying again")
+    PASSWORD_CHANGE_LIMITS[user["id"]] = now
+
+    # Get user with password hash
+    db_user = await db.users.find_one({"id": user["id"]})
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Verify current password
+    if not db_user.get("password_hash") or not verify_password(data.current_password, db_user["password_hash"]):
+        raise HTTPException(status_code=400, detail="Incorrect current password")
+    
+    # Validate new password
+    new_pw = data.new_password
+    if len(new_pw) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+    if not any(c.isupper() for c in new_pw):
+        raise HTTPException(status_code=400, detail="Password must contain at least one uppercase letter")
+    if not any(c.isdigit() for c in new_pw):
+        raise HTTPException(status_code=400, detail="Password must contain at least one number")
+    if not any(not c.isalnum() for c in new_pw):
+        raise HTTPException(status_code=400, detail="Password must contain at least one special character")
+    
+    if data.current_password == new_pw:
+        raise HTTPException(status_code=400, detail="New password cannot be the same as current password")
+    
+    # Update password
+    new_hash = hash_password(new_pw)
+    await db.users.update_one({"id": user["id"]}, {"$set": {"password_hash": new_hash}})
+    
+    return {"message": "Password changed successfully"}
+
+@api_router.post("/auth/forgot-password")
+async def forgot_password(data: ForgotPasswordRequest):
+    # Rate limit: 60s
+    now = time.time()
+    last_attempt = getattr(forgot_password, "_limits", {}).get(data.email, 0)
+    if now - last_attempt < 60:
+        raise HTTPException(status_code=429, detail="Please wait 1 minute before requesting a new code")
+    
+    if not hasattr(forgot_password, "_limits"):
+        forgot_password._limits = {}
+    forgot_password._limits[data.email] = now
+
+    user = await db.users.find_one({"email": data.email})
+    if not user:
+        # Silently fail or return success to prevent email enumeration?
+        # User requested specific toast "Verification code sent", so let's assume we proceed.
+        # But in real app, better to be careful. Here I'll proceed for simplicity.
+        return {"message": "Verification code sent"}
+
+    code = str(random.randint(100000, 999999))
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
+    
+    # Store hashed code
+    hashed_code = hash_password(code)
+    await db.password_resets.update_one(
+        {"email": data.email},
+        {"$set": {"code": hashed_code, "expires_at": expires_at.isoformat()}},
+        upsert=True
+    )
+    
+    # Send email
+    NotificationService.send_email(data.email, "VitalWave Password Reset Code", f"Your password reset code is: {code}")
+    logger.info(f"Password reset code for {data.email}: {code}")
+    
+    return {"message": "Verification code sent"}
+
+@api_router.post("/auth/verify-reset-code")
+async def verify_reset_code(data: VerifyResetCodeRequest):
+    record = await db.password_resets.find_one({"email": data.email})
+    if not record:
+        raise HTTPException(status_code=400, detail="Invalid or expired code")
+    
+    expiry = datetime.fromisoformat(record["expires_at"].replace('Z', '+00:00'))
+    if datetime.now(timezone.utc) > expiry:
+        raise HTTPException(status_code=400, detail="Invalid or expired code")
+    
+    if not verify_password(data.code, record["code"]):
+        raise HTTPException(status_code=400, detail="Invalid or expired code")
+    
+    return {"message": "Code verified"}
+
+@api_router.post("/auth/reset-password")
+async def reset_password(data: ResetPasswordRequest):
+    record = await db.password_resets.find_one({"email": data.email})
+    if not record or not verify_password(data.code, record["code"]):
+        raise HTTPException(status_code=400, detail="Invalid or expired code")
+    
+    expiry = datetime.fromisoformat(record["expires_at"].replace('Z', '+00:00'))
+    if datetime.now(timezone.utc) > expiry:
+        raise HTTPException(status_code=400, detail="Invalid or expired code")
+
+    # Update password
+    new_pw = data.new_password
+    # Re-validate here just in case
+    if len(new_pw) < 8 or not any(c.isupper() for c in new_pw) or not any(c.isdigit() for c in new_pw) or not any(not c.isalnum() for c in new_pw):
+         raise HTTPException(status_code=400, detail="Password does not meet requirements")
+
+    new_hash = hash_password(new_pw)
+    await db.users.update_one({"email": data.email}, {"$set": {"password_hash": new_hash}})
+    
+    # Invalidate code
+    await db.password_resets.delete_one({"email": data.email})
+    
+    return {"message": "Password updated successfully"}
 
 # ============== LOCATION ROUTES ==============
 
@@ -1054,8 +1182,10 @@ async def upload_file(
     
     # Generate AI summary & Structured Data
     summary_short = []
+    summary_detailed = ""
     medicines = []
     lab_values = []
+    suggestions = []
     
     try:
         from emergentintegrations.llm.chat import LlmChat, UserMessage
@@ -1086,7 +1216,7 @@ async def upload_file(
             api_key=EMERGENT_LLM_KEY,
             session_id=f"upload-{file_id}",
             system_message=system_prompt
-        ).with_model("gemini", os.environ.get("GEMINI_MODEL", "gemini-2.5-flash"))
+        ).with_model("gemini", os.environ.get("GEMINI_MODEL", "gemini-1.5-flash"))
         
         user_msg = UserMessage(
             text=f"Analyze this medical document. Extracted text (if any): {extracted_text[:1000]}", 
@@ -1161,7 +1291,7 @@ async def upload_text(data: TextUpload, user: dict = Depends(get_current_user)):
             api_key=EMERGENT_LLM_KEY,
             session_id=f"text-{file_id}",
             system_message="You are a medical document analyzer. Provide concise, safe summaries and include drug suggestions if relevant."
-        ).with_model("gemini", os.environ.get("GEMINI_MODEL", "gemini-2.5-flash"))
+        ).with_model("gemini", os.environ.get("GEMINI_MODEL", "gemini-1.5-flash"))
         
         response = await chat.send_message(UserMessage(
             text=f"Summarize this medical text in 3 bullet points:\n\n{data.text[:2000]}"
@@ -1350,9 +1480,9 @@ async def get_lifestyle(user: dict = Depends(get_current_user)):
 # ============== CHAT ==============
 
 MEDICAL_REFUSAL_RESPONSES = {
-    "en": "I'm here to help with medical and health-related questions only 💊. I can assist with information about hospitals, medicines, diseases, symptoms, lab reports, diet, and exercise. What health topic would you like to know about? 🏥",
-    "hi": "मैं केवल चिकित्सा और स्वास्थ्य संबंधी प्रश्नों में मदद करने के लिए यहां हूं 💊। मैं अस्पतालों, दवाओं, बीमारियों, लक्षणों, लैब रिपोर्ट, आहार और व्यायाम के बारे में जानकारी में सहायता कर सकता हूं। आप किस स्वास्थ्य विषय के बारे में जानना चाहेंगे? 🏥",
-    "te": "నేను వైద్య మరియు ఆరోగ్య సంబంధిత ప్రశ్నలకు మాత్రమే సహాయం చేయడానికి ఇక్కడ ఉన్నాను 💊. ఆసుపత్రులు, మందులు, వ్యాధులు, లక్షణాలు, ల్యాబ్ నివేదికలు, ఆహారం మరియు వ్యాయామం గురించి సమాచారంలో నేను సహాయం చేయగలను. మీరు ఏ ఆరోగ్య అంశం గురించి తెలుసుకోవాలనుకుంటున్నారు? 🏥"
+    "en": "I'm here to help with medical, health, and diet-related questions only 💊. I can assist with information about hospitals, medicines, diseases, symptoms, lab reports, wellness, diet, and exercise. What health topic would you like to know about? 🏥",
+    "hi": "मैं केवल चिकित्सा, स्वास्थ्य और आहार से संबंधित प्रश्नों में मदद करने के लिए यहां हूं 💊। मैं अस्पतालों, दवाओं, बीमारियों, लक्षणों, लैब रिपोर्ट, कल्याण, आहार और व्यायाम के बारे में जानकारी में सहायता कर सकता हूं। आप किस स्वास्थ्य विषय के बारे में जानना चाहेंगे? 🏥",
+    "te": "నేను వైద్య, ఆరోగ్య మరియు ఆహార సంబంధిత ప్రశ్నలకు మాత్రమే సహాయం చేయడానికి ఇక్కడ ఉన్నాను 💊. ఆసుపత్రులు, మందులు, వ్యాధులు, లక్షణాలు, ల్యాబ్ నివేదికలు, ఆరోగ్యం, ఆహారం మరియు వ్యాయామం గురించి సమాచారంలో నేను సహాయం చేయగలను. మీరు ఏ ఆరోగ్య అంశం గురించి తెలుసుకోవాలనుకుంటున్నారు? 🏥"
 }
 
 @api_router.post("/chat")
@@ -1399,9 +1529,10 @@ async def chat(message: ChatMessage, user: dict = Depends(get_current_user)):
         "te": "తెలుగులో సమాధానం ఇవ్వండి."
     }.get(lang, "Respond in English.")
     
-    system_prompt = f"""You are VitalWave AI, a helpful medical assistant. 
+    system_prompt = f"""You are VitalWave AI, a helpful medical and wellness assistant. 
 {lang_instruction}
-- Only answer medical/health questions
+- Answer medical, health, wellness, and diet-related questions.
+- If a question is completely unrelated to health/medicine/wellness (e.g., coding, politics), politely refocus the conversation on health.
 - Be concise (use bullet points)
 - Use friendly emojis sparingly
 - Never diagnose - always recommend consulting a doctor
@@ -1417,7 +1548,7 @@ async def chat(message: ChatMessage, user: dict = Depends(get_current_user)):
             api_key=EMERGENT_LLM_KEY,
             session_id=f"chat-{user['id']}-{datetime.now().strftime('%Y%m%d')}",
             system_message=system_prompt
-        ).with_model("gemini", os.environ.get("GEMINI_MODEL", "gemini-2.5-flash"))
+        ).with_model("gemini", os.environ.get("GEMINI_MODEL", "gemini-1.5-flash"))
         
         response = await chat_instance.send_message(UserMessage(text=message.message))
         
@@ -1445,6 +1576,18 @@ async def get_chat_history(user: dict = Depends(get_current_user), page: int = 1
     history = await db.chat_history.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).skip(skip).limit(page_size).to_list(page_size)
     total = await db.chat_history.count_documents({"user_id": user["id"]})
     return {"items": list(reversed(history)), "total": total, "page": page, "page_size": page_size}
+
+@api_router.delete("/chat/history/{chat_id}")
+async def delete_chat_item(chat_id: str, user: dict = Depends(get_current_user)):
+    result = await db.chat_history.delete_one({"id": chat_id, "user_id": user["id"]})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Chat item not found")
+    return {"message": "Chat item deleted"}
+
+@api_router.delete("/chat/history")
+async def clear_chat_history(user: dict = Depends(get_current_user)):
+    await db.chat_history.delete_many({"user_id": user["id"]})
+    return {"message": "Chat history cleared"}
 
 # ============== VOICE ==============
 
@@ -1549,9 +1692,15 @@ print(f"Parsed Origins: {allowed_origins}")
 print(f"MONGO_URL: {os.environ.get('MONGO_URL')}")
 print("--- END DIAGNOSTICS ---\n")
 
+# Determine if we can allow credentials (not allowed with '*' origins)
+use_credentials = True
+if "*" in allowed_origins:
+    logger.warning("Wildcard '*' detected in CORS_ORIGINS. Disabling allow_credentials for browser compatibility.")
+    use_credentials = False
+
 app.add_middleware(
     CORSMiddleware,
-    allow_credentials=True,
+    allow_credentials=use_credentials,
     allow_origins=allowed_origins,
     allow_methods=["*"],
     allow_headers=["*"],

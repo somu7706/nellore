@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
@@ -20,7 +20,12 @@ import {
   Loader2,
   Sun,
   Moon,
-  Monitor
+  Monitor,
+  Eye,
+  EyeOff,
+  Lock,
+  CheckCircle2,
+  XCircle
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -28,18 +33,48 @@ const Settings = () => {
   const { t, i18n } = useTranslation();
   const { user, updateUser, setLocation } = useAuth();
   const { theme, setTheme } = useTheme();
-  
+
   const [name, setName] = useState(user?.name || '');
   const [locationQuery, setLocationQuery] = useState('');
   const [saving, setSaving] = useState(false);
   const [savingLocation, setSavingLocation] = useState(false);
+
+  // New features state
+  const [editingUsername, setEditingUsername] = useState(false);
+  const [newUsername, setNewUsername] = useState(user?.username || '');
+  const [savingUsername, setSavingUsername] = useState(false);
+  const [usernameError, setUsernameError] = useState('');
+
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPasswords, setShowPasswords] = useState(false);
+  const [savingPassword, setSavingPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState('');
+
+  // Forgot Password flow state
+  const [resetState, setResetState] = useState('default'); // 'default', 'verifying', 'resetting'
+  const [resetCode, setResetCode] = useState('');
+  const [verifyingCode, setVerifyingCode] = useState(false);
+  const [resendingCode, setResendingCode] = useState(false);
+  const [resendTimer, setResendTimer] = useState(0);
+
+  useEffect(() => {
+    let interval;
+    if (resendTimer > 0) {
+      interval = setInterval(() => {
+        setResendTimer((prev) => prev - 1);
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [resendTimer]);
 
   const handleSaveProfile = async () => {
     if (!name.trim()) {
       toast.error('Name is required');
       return;
     }
-    
+
     setSaving(true);
     try {
       await updateUser({ name: name.trim() });
@@ -117,6 +152,118 @@ const Settings = () => {
     );
   };
 
+  const { api } = useAuth();
+
+  const isUsernameValid = newUsername.length >= 4 && !newUsername.includes(' ') && /^[a-zA-Z0-9_]+$/.test(newUsername);
+
+  const handleSaveUsername = async () => {
+    setUsernameError('');
+    setSavingUsername(true);
+    try {
+      const response = await api.patch('/user/username', { username: newUsername });
+      await updateUser({ username: newUsername });
+      setEditingUsername(false);
+      toast.success(response.data.message || 'Username updated');
+    } catch (err) {
+      const msg = err.response?.data?.detail || 'Failed to update username';
+      setUsernameError(msg);
+      toast.error(msg);
+    } finally {
+      setSavingUsername(false);
+    }
+  };
+
+  const passwordRules = {
+    length: newPassword.length >= 8,
+    upper: /[A-Z]/.test(newPassword),
+    number: /[0-9]/.test(newPassword),
+    special: /[^A-Za-z0-9]/.test(newPassword),
+    different: newPassword !== currentPassword,
+    match: newPassword === confirmPassword && newPassword !== ''
+  };
+
+  const isPasswordValid = Object.values(passwordRules).every(Boolean) && currentPassword.length > 0;
+
+  const handleChangePassword = async (e) => {
+    if (e) e.preventDefault();
+    setPasswordError('');
+    setSavingPassword(true);
+    try {
+      const response = await api.post('/user/change-password', {
+        current_password: currentPassword,
+        new_password: newPassword
+      });
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      toast.success(response.data.message || 'Password changed successfully');
+    } catch (err) {
+      const msg = err.response?.data?.detail || 'Failed to change password';
+      setPasswordError(msg);
+      toast.error(msg);
+    } finally {
+      setSavingPassword(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    setPasswordError('');
+    setResendingCode(true);
+    try {
+      await api.post('/auth/forgot-password', { email: user?.email });
+      setResetState('verifying');
+      setResendTimer(60);
+      toast.success('Verification code sent');
+    } catch (err) {
+      const msg = err.response?.data?.detail || 'Failed to send code';
+      setPasswordError(msg);
+      toast.error(msg);
+    } finally {
+      setResendingCode(false);
+    }
+  };
+
+  const handleVerifyCode = async () => {
+    setPasswordError('');
+    setVerifyingCode(true);
+    try {
+      await api.post('/auth/verify-reset-code', { email: user?.email, code: resetCode });
+      setResetState('resetting');
+      toast.success('Code verified successfully');
+    } catch (err) {
+      const msg = err.response?.data?.detail || 'Invalid or expired code';
+      setPasswordError(msg);
+      toast.error(msg);
+    } finally {
+      setVerifyingCode(false);
+    }
+  };
+
+  const handleResetPassword = async (e) => {
+    if (e) e.preventDefault();
+    setPasswordError('');
+    setSavingPassword(true);
+    try {
+      await api.post('/auth/reset-password', {
+        email: user?.email,
+        code: resetCode,
+        new_password: newPassword
+      });
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setResetCode('');
+      setResetState('default');
+      toast.success('Password updated successfully');
+    } catch (err) {
+      const msg = err.response?.data?.detail || 'Failed to reset password';
+      setPasswordError(msg);
+      toast.error(msg);
+    } finally {
+      setSavingPassword(false);
+    }
+  };
+
   return (
     <Layout>
       <div className="max-w-2xl mx-auto space-y-6" data-testid="settings-page">
@@ -158,6 +305,215 @@ const Settings = () => {
               {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
               Save Profile
             </Button>
+          </CardContent>
+        </Card>
+
+        {/* Account Profile Section */}
+        <Card className="glass-panel border-border/50">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <User className="h-5 w-5 text-primary" />
+              Account Profile
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="username">Username</Label>
+              <div className="flex gap-2">
+                {editingUsername ? (
+                  <div className="flex-1 space-y-2">
+                    <Input
+                      id="username"
+                      value={newUsername}
+                      onChange={(e) => setNewUsername(e.target.value)}
+                      placeholder="Enter new username"
+                      className={usernameError ? 'border-destructive' : ''}
+                    />
+                    {usernameError && <p className="text-xs text-destructive">{usernameError}</p>}
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        onClick={handleSaveUsername}
+                        disabled={!isUsernameValid || savingUsername}
+                        className="rounded-full"
+                      >
+                        {savingUsername ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+                        Save
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setEditingUsername(false);
+                          setNewUsername(user?.username || '');
+                          setUsernameError('');
+                        }}
+                        className="rounded-full"
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between flex-1 p-3 rounded-xl bg-muted/50">
+                    <span className="font-medium text-foreground">{user?.username || 'Not set'}</span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setEditingUsername(true)}
+                      className="rounded-full transition-all hover:bg-primary hover:text-primary-foreground"
+                    >
+                      Edit Username
+                    </Button>
+                  </div>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">Min 4 characters, no spaces, letters, numbers, underscores only</p>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Change Password Section */}
+        <Card className="glass-panel border-border/50">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Lock className="h-5 w-5 text-primary" />
+              Change Password
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <div className={resetState !== 'default' ? 'opacity-50 pointer-events-none grayscale-[0.5]' : ''}>
+                  <Label htmlFor="currentPassword">Current Password</Label>
+                  <div className="relative">
+                    <Input
+                      id="currentPassword"
+                      type={showPasswords ? 'text' : 'password'}
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                      placeholder="Enter current password"
+                      disabled={resetState !== 'default'}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPasswords(!showPasswords)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    >
+                      {showPasswords ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                  {resetState === 'default' && (
+                    <button
+                      type="button"
+                      onClick={handleForgotPassword}
+                      className="text-xs text-primary hover:underline"
+                    >
+                      Forgot password?
+                    </button>
+                  )}
+                </div>
+
+                {resetState !== 'default' && (
+                  <div className="space-y-2">
+                    <div className="p-3 rounded-xl bg-muted/50 border border-primary/20">
+                      <p className="text-xs text-muted-foreground mb-2">Enter the verification code sent to your email</p>
+                      <div className="flex gap-2">
+                        <Input
+                          value={resetCode}
+                          onChange={(e) => setResetCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                          placeholder="6-digit code"
+                          className="font-mono text-center tracking-widest"
+                          disabled={resetState === 'resetting'}
+                        />
+                        {resetState === 'verifying' && (
+                          <Button
+                            size="sm"
+                            onClick={handleVerifyCode}
+                            disabled={resetCode.length !== 6 || verifyingCode}
+                          >
+                            {verifyingCode ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Verify'}
+                          </Button>
+                        )}
+                      </div>
+                      {resetState === 'verifying' && (
+                        <div className="mt-2 text-right">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={handleForgotPassword}
+                            disabled={resendTimer > 0 || resendingCode}
+                            className="h-auto p-0 text-xs text-primary font-normal hover:bg-transparent"
+                          >
+                            {resendTimer > 0 ? `Resend Code (${resendTimer}s)` : 'Resend Code'}
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <Label htmlFor="newPassword">New Password</Label>
+                  <div className="relative">
+                    <Input
+                      id="newPassword"
+                      type={showPasswords ? 'text' : 'password'}
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="Enter new password"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 mt-2">
+                    <div className={`flex items-center gap-1 text-xs ${passwordRules.length ? 'text-success-signal' : 'text-muted-foreground'}`}>
+                      {passwordRules.length ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+                      8+ characters
+                    </div>
+                    <div className={`flex items-center gap-1 text-xs ${passwordRules.upper ? 'text-success-signal' : 'text-muted-foreground'}`}>
+                      {passwordRules.upper ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+                      Uppercase letter
+                    </div>
+                    <div className={`flex items-center gap-1 text-xs ${passwordRules.number ? 'text-success-signal' : 'text-muted-foreground'}`}>
+                      {passwordRules.number ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+                      At least one number
+                    </div>
+                    <div className={`flex items-center gap-1 text-xs ${passwordRules.special ? 'text-success-signal' : 'text-muted-foreground'}`}>
+                      {passwordRules.special ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+                      Special character
+                    </div>
+                    <div className={`flex items-center gap-1 text-xs ${passwordRules.different ? 'text-success-signal' : 'text-muted-foreground'}`}>
+                      {passwordRules.different ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+                      Different from current
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="confirmPassword">Confirm New Password</Label>
+                  <Input
+                    id="confirmPassword"
+                    type={showPasswords ? 'text' : 'password'}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Confirm new password"
+                  />
+                  {!passwordRules.match && confirmPassword && (
+                    <p className="text-xs text-destructive">Passwords do not match</p>
+                  )}
+                </div>
+
+                {passwordError && <p className="text-sm text-destructive mt-2">{passwordError}</p>}
+
+                <Button
+                  onClick={resetState === 'resetting' ? handleResetPassword : handleChangePassword}
+                  disabled={!isPasswordValid || savingPassword || resetState === 'verifying'}
+                  className="w-full rounded-full"
+                >
+                  {savingPassword ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+                  {resetState === 'resetting' ? 'Reset Password' : 'Change Password'}
+                </Button>
+              </div>
+            </div>
           </CardContent>
         </Card>
 

@@ -38,6 +38,8 @@ import {
   Languages
 } from 'lucide-react';
 
+import logo from '../assets/logo.png';
+
 const Layout = ({ children }) => {
   const { t, i18n } = useTranslation();
   const { user, logout } = useAuth();
@@ -79,9 +81,9 @@ const Layout = ({ children }) => {
       {/* Logo */}
       <div className="p-6 border-b border-border/40">
         <Link to="/dashboard" className="flex items-center gap-2" onClick={onItemClick}>
-          <Heart className="h-7 w-7 text-primary" />
-          <span className="text-xl font-bold">
-            <span className="text-primary">Vital</span>Wave
+          <img src={logo} alt="MediCure Logo" className="h-8 w-8 object-contain" />
+          <span className="text-xl font-bold tracking-tight">
+            <span className="text-primary">Medi</span>Cure
           </span>
         </Link>
       </div>
@@ -102,11 +104,10 @@ const Layout = ({ children }) => {
                     to={item.path}
                     onClick={onItemClick}
                     data-testid={`nav-${item.path.slice(1)}`}
-                    className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group relative ${
-                      isActive
+                    className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group relative ${isActive
                         ? 'bg-primary/10 text-primary font-medium'
                         : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                    }`}
+                      }`}
                   >
                     <item.icon className={`h-5 w-5 ${isActive ? 'text-primary' : ''}`} />
                     <span>{item.label}</span>
@@ -135,11 +136,10 @@ const Layout = ({ children }) => {
                       to={item.path}
                       onClick={onItemClick}
                       data-testid={`nav-${item.path.slice(1)}`}
-                      className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group relative ${
-                        isActive
+                      className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group relative ${isActive
                           ? 'bg-primary/10 text-primary font-medium'
                           : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                      }`}
+                        }`}
                     >
                       <item.icon className={`h-5 w-5 ${isActive ? 'text-primary' : ''}`} />
                       <span>{item.label}</span>
@@ -161,11 +161,10 @@ const Layout = ({ children }) => {
           to="/settings"
           onClick={onItemClick}
           data-testid="nav-settings"
-          className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 ${
-            location.pathname === '/settings'
+          className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 ${location.pathname === '/settings'
               ? 'bg-primary/10 text-primary font-medium'
               : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-          }`}
+            }`}
         >
           <Settings className="h-5 w-5" />
           <span>{t('nav.settings')}</span>
@@ -185,7 +184,7 @@ const Layout = ({ children }) => {
     <div className="min-h-screen bg-background ecg-pattern">
       {/* Desktop Sidebar */}
       <aside className="hidden lg:flex fixed left-0 top-0 h-full w-64 border-r border-border/40 bg-background/80 backdrop-blur-md z-40 flex-col">
-        <NavContent onItemClick={() => {}} />
+        <NavContent onItemClick={() => { }} />
       </aside>
 
       {/* Mobile Sidebar */}

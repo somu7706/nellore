@@ -44,7 +44,8 @@ const resources = {
         autoLocation: 'Use Current Location',
         manualLocation: 'Enter Location Manually',
         locationPlaceholder: 'Enter city, pincode or address',
-        selectLanguage: 'Preferred Language'
+        selectLanguage: 'Preferred Language',
+        googleLogin: 'Sign In with Google'
       },
       // Dashboard
       dashboard: {
@@ -227,7 +228,8 @@ const resources = {
         autoLocation: 'वर्तमान स्थान का उपयोग करें',
         manualLocation: 'स्थान मैन्युअल रूप से दर्ज करें',
         locationPlaceholder: 'शहर, पिनकोड या पता दर्ज करें',
-        selectLanguage: 'पसंदीदा भाषा'
+        selectLanguage: 'पसंदीदा भाषा',
+        googleLogin: 'गूगल के साथ साइन इन करें'
       },
       // Dashboard
       dashboard: {
@@ -410,7 +412,8 @@ const resources = {
         autoLocation: 'ప్రస్తుత స్థానాన్ని ఉపయోగించండి',
         manualLocation: 'స్థానాన్ని మాన్యువల్‌గా నమోదు చేయండి',
         locationPlaceholder: 'నగరం, పిన్‌కోడ్ లేదా చిరునామా నమోదు చేయండి',
-        selectLanguage: 'ఇష్టపడే భాష'
+        selectLanguage: 'ఇష్టపడే భాష',
+        googleLogin: 'గూగుల్‌తో సైన్ ఇన్ చేయండి'
       },
       // Dashboard
       dashboard: {

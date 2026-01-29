@@ -196,6 +196,12 @@ const AppContent = () => {
 };
 
 function App() {
+  if (!process.env.REACT_APP_GOOGLE_CLIENT_ID) {
+    console.warn("WARNING: REACT_APP_GOOGLE_CLIENT_ID is not defined. Google Login will fail.");
+  } else {
+    console.log("Google Client ID loaded (starts with):", process.env.REACT_APP_GOOGLE_CLIENT_ID.substring(0, 10) + "...");
+  }
+
   return (
     <GoogleOAuthProvider clientId={process.env.REACT_APP_GOOGLE_CLIENT_ID}>
       <ThemeProvider>

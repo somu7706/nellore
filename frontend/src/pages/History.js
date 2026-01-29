@@ -14,6 +14,8 @@ import {
   DialogFooter,
 } from '../components/ui/dialog';
 import { ScrollArea } from '../components/ui/scroll-area';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
+import { Input } from '../components/ui/input';
 import {
   FileText,
   Calendar,
@@ -21,7 +23,10 @@ import {
   Eye,
   Loader2,
   AlertCircle,
-  Upload
+  Upload,
+  Bot,
+  Search,
+  ChevronRight
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Link } from 'react-router-dom';
@@ -30,40 +35,70 @@ const History = () => {
   const { t } = useTranslation();
   const { api, refreshUser } = useAuth();
   const [uploads, setUploads] = useState([]);
+  const [chatHistory, setChatHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedUpload, setSelectedUpload] = useState(null);
   const [deleteId, setDeleteId] = useState(null);
+  const [deleteType, setDeleteType] = useState('upload'); // 'upload' or 'chat'
   const [deleting, setDeleting] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeTab, setActiveTab] = useState('uploads');
 
   useEffect(() => {
-    const fetchUploads = async () => {
+    const fetchHistory = async () => {
+      setLoading(true);
       try {
-        const response = await api.get('/uploads');
-        setUploads(response.data.items || []);
+        const [uploadsRes, chatRes] = await Promise.all([
+          api.get('/uploads'),
+          api.get('/chat/history')
+        ]);
+        setUploads(uploadsRes.data.items || []);
+        setChatHistory(chatRes.data.items || []);
       } catch (err) {
-        console.error('Failed to fetch uploads:', err);
+        console.error('Failed to fetch history:', err);
         toast.error('Failed to load history');
       } finally {
         setLoading(false);
       }
     };
-    fetchUploads();
+    fetchHistory();
   }, [api]);
 
   const handleDelete = async () => {
     if (!deleteId) return;
-    
+
     setDeleting(true);
     try {
-      await api.delete(`/uploads/${deleteId}`);
-      setUploads(prev => prev.filter(u => u.id !== deleteId));
+      if (deleteType === 'upload') {
+        await api.delete(`/uploads/${deleteId}`);
+        setUploads(prev => prev.filter(u => u.id !== deleteId));
+        toast.success('Upload deleted');
+      } else {
+        await api.delete(`/chat/history/${deleteId}`);
+        setChatHistory(prev => prev.filter(c => c.id !== deleteId));
+        toast.success('Conversation record deleted');
+      }
       await refreshUser();
-      toast.success('Upload deleted');
     } catch (err) {
       toast.error('Failed to delete');
     } finally {
       setDeleting(false);
       setDeleteId(null);
+    }
+  };
+
+  const clearAllChatRecords = async () => {
+    if (window.confirm('Delete all AI Assistant chat records? This cannot be undone.')) {
+      setLoading(true);
+      try {
+        await api.delete('/chat/history');
+        setChatHistory([]);
+        toast.success('All chat records cleared');
+      } catch (err) {
+        toast.error('Failed to clear records');
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
@@ -108,7 +143,7 @@ const History = () => {
           <div>
             <h1 className="text-3xl font-bold text-foreground">{t('nav.history')}</h1>
             <p className="text-muted-foreground mt-1">
-              View and manage your uploaded documents
+              View and manage your health records
             </p>
           </div>
           <Link to="/upload">
@@ -119,191 +154,184 @@ const History = () => {
           </Link>
         </div>
 
-        {/* Uploads List */}
-        {uploads.length > 0 ? (
-          <div className="grid gap-4">
-            {uploads.map((upload) => {
-              const config = getDocTypeConfig(upload.doc_type);
-              return (
-                <Card key={upload.id} className="glass-panel border-border/50">
-                  <CardContent className="p-4">
-                    <div className="flex items-start gap-4">
-                      {/* Icon */}
-                      <div className="w-12 h-12 rounded-xl bg-muted flex items-center justify-center text-2xl flex-shrink-0">
-                        {config.icon}
-                      </div>
+        {/* Tabs and Content */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+            <TabsList className="grid grid-cols-2 w-full sm:w-auto">
+              <TabsTrigger value="uploads">Documents</TabsTrigger>
+              <TabsTrigger value="assistant">AI Assistant</TabsTrigger>
+            </TabsList>
 
-                      {/* Info */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <h3 className="font-medium text-foreground truncate">{upload.filename}</h3>
-                            <div className="flex items-center gap-2 mt-1">
-                              <Badge className={config.color}>{upload.doc_type}</Badge>
-                              <span className="text-xs text-muted-foreground flex items-center gap-1">
-                                <Calendar className="h-3 w-3" />
-                                {formatDate(upload.created_at)}
-                              </span>
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1 sm:w-64">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search history..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9 h-10 rounded-full"
+                />
+              </div>
+              {activeTab === 'assistant' && chatHistory.length > 0 && (
+                <Button variant="ghost" size="sm" onClick={clearAllChatRecords} className="text-destructive hover:text-destructive hover:bg-destructive/10 rounded-full px-4">
+                  Clear All
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {/* Uploads History */}
+          <TabsContent value="uploads" className="mt-0 outline-none">
+            {uploads.filter(u => u.filename.toLowerCase().includes(searchQuery.toLowerCase())).length > 0 ? (
+              <div className="grid gap-4">
+                {uploads
+                  .filter(u => u.filename.toLowerCase().includes(searchQuery.toLowerCase()))
+                  .map((upload) => {
+                    const config = getDocTypeConfig(upload.doc_type);
+                    return (
+                      <Card key={upload.id} className="glass-panel border-border/50">
+                        <CardContent className="p-4">
+                          <div className="flex items-start gap-4">
+                            <div className="w-12 h-12 rounded-xl bg-muted flex items-center justify-center text-2xl flex-shrink-0">
+                              {config.icon}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-start justify-between gap-2">
+                                <div>
+                                  <h3 className="font-medium text-foreground truncate">{upload.filename}</h3>
+                                  <div className="flex items-center gap-2 mt-1">
+                                    <Badge className={config.color}>{upload.doc_type}</Badge>
+                                    <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                      <Calendar className="h-3 w-3" />
+                                      {formatDate(upload.created_at)}
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <Dialog>
+                                    <DialogTrigger asChild>
+                                      <Button variant="ghost" size="icon" onClick={() => setSelectedUpload(upload)}>
+                                        <Eye className="h-4 w-4" />
+                                      </Button>
+                                    </DialogTrigger>
+                                    <DialogContent className="max-w-2xl max-h-[80vh]">
+                                      <DialogHeader>
+                                        <DialogTitle className="flex items-center gap-2">
+                                          <span className="text-2xl">{config.icon}</span>
+                                          {upload.filename}
+                                        </DialogTitle>
+                                      </DialogHeader>
+                                      <ScrollArea className="max-h-[60vh]">
+                                        <div className="space-y-4 p-1">
+                                          {upload.summary_short?.length > 0 && (
+                                            <div>
+                                              <h4 className="font-medium mb-2">Summary</h4>
+                                              <ul className="space-y-1">
+                                                {upload.summary_short.map((item, i) => (
+                                                  <li key={i} className="text-sm text-muted-foreground flex items-start gap-2">
+                                                    <span className="text-primary mt-1">•</span>{item}
+                                                  </li>
+                                                ))}
+                                              </ul>
+                                            </div>
+                                          )}
+                                          {upload.summary_detailed && (
+                                            <div>
+                                              <h4 className="font-medium mb-2">Details</h4>
+                                              <p className="text-sm text-muted-foreground whitespace-pre-wrap">{upload.summary_detailed}</p>
+                                            </div>
+                                          )}
+                                        </div>
+                                      </ScrollArea>
+                                    </DialogContent>
+                                  </Dialog>
+                                  <Button variant="ghost" size="icon" onClick={() => { setDeleteId(upload.id); setDeleteType('upload'); }} className="text-destructive hover:text-destructive">
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </div>
                             </div>
                           </div>
-                          <div className="flex items-center gap-1">
-                            {/* View Details */}
-                            <Dialog>
-                              <DialogTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => setSelectedUpload(upload)}
-                                  data-testid={`view-${upload.id}`}
-                                >
-                                  <Eye className="h-4 w-4" />
-                                </Button>
-                              </DialogTrigger>
-                              <DialogContent className="max-w-2xl max-h-[80vh]">
-                                <DialogHeader>
-                                  <DialogTitle className="flex items-center gap-2">
-                                    <span className="text-2xl">{config.icon}</span>
-                                    {upload.filename}
-                                  </DialogTitle>
-                                </DialogHeader>
-                                <ScrollArea className="max-h-[60vh]">
-                                  <div className="space-y-4 p-1">
-                                    {/* Summary */}
-                                    {upload.summary_short?.length > 0 && (
-                                      <div>
-                                        <h4 className="font-medium mb-2">Summary</h4>
-                                        <ul className="space-y-1">
-                                          {upload.summary_short.map((item, i) => (
-                                            <li key={i} className="text-sm text-muted-foreground flex items-start gap-2">
-                                              <span className="text-primary mt-1">•</span>
-                                              {item}
-                                            </li>
-                                          ))}
-                                        </ul>
-                                      </div>
-                                    )}
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+              </div>
+            ) : (
+              <div className="text-center py-12 bg-muted/20 rounded-2xl border border-dashed border-border/50">
+                <p className="text-muted-foreground">No documents found matching your search.</p>
+              </div>
+            )}
+          </TabsContent>
 
-                                    {/* Detailed Summary */}
-                                    {upload.summary_detailed && (
-                                      <div>
-                                        <h4 className="font-medium mb-2">Details</h4>
-                                        <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-                                          {upload.summary_detailed}
-                                        </p>
-                                      </div>
-                                    )}
-
-                                    {/* Medicines */}
-                                    {upload.medicines?.length > 0 && (
-                                      <div>
-                                        <h4 className="font-medium mb-2">Medicines</h4>
-                                        <div className="flex flex-wrap gap-2">
-                                          {upload.medicines.map((med, i) => (
-                                            <Badge key={i} variant="secondary">💊 {med.name}</Badge>
-                                          ))}
-                                        </div>
-                                      </div>
-                                    )}
-
-                                    {/* Lab Values */}
-                                    {upload.lab_values?.length > 0 && (
-                                      <div>
-                                        <h4 className="font-medium mb-2">Lab Values</h4>
-                                        <div className="grid grid-cols-2 gap-2">
-                                          {upload.lab_values.map((val, i) => (
-                                            <div key={i} className="p-2 rounded-lg bg-muted/50">
-                                              <p className="text-xs text-muted-foreground">{val.name}</p>
-                                              <p className="font-medium">{val.value} {val.unit}</p>
-                                            </div>
-                                          ))}
-                                        </div>
-                                      </div>
-                                    )}
-
-                                    {/* Extracted Text */}
-                                    {upload.extracted_text && (
-                                      <div>
-                                        <h4 className="font-medium mb-2">Extracted Text</h4>
-                                        <div className="p-3 rounded-lg bg-muted/50 text-xs font-mono max-h-40 overflow-auto">
-                                          {upload.extracted_text}
-                                        </div>
-                                      </div>
-                                    )}
-                                  </div>
-                                </ScrollArea>
-                              </DialogContent>
-                            </Dialog>
-
-                            {/* Delete */}
-                            <Dialog open={deleteId === upload.id} onOpenChange={(open) => !open && setDeleteId(null)}>
-                              <DialogTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => setDeleteId(upload.id)}
-                                  className="text-destructive hover:text-destructive"
-                                  data-testid={`delete-${upload.id}`}
-                                >
+          {/* AI Assistant History */}
+          <TabsContent value="assistant" className="mt-0 outline-none">
+            {chatHistory.filter(c => c.message.toLowerCase().includes(searchQuery.toLowerCase()) || c.response.toLowerCase().includes(searchQuery.toLowerCase())).length > 0 ? (
+              <div className="grid gap-4">
+                {chatHistory
+                  .filter(c => c.message.toLowerCase().includes(searchQuery.toLowerCase()) || c.response.toLowerCase().includes(searchQuery.toLowerCase()))
+                  .map((chat) => (
+                    <Card key={chat.id} className="glass-panel border-border/50 overflow-hidden group">
+                      <CardContent className="p-0">
+                        <div className="flex gap-4 p-4">
+                          <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                            <Bot className="h-5 w-5 text-primary" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start justify-between gap-4">
+                              <div className="min-w-0">
+                                <p className="text-sm font-medium text-foreground truncate">{chat.message}</p>
+                                <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{chat.response}</p>
+                                <div className="flex items-center gap-3 mt-2">
+                                  <span className="text-[10px] text-muted-foreground flex items-center gap-1 uppercase tracking-wider">
+                                    <Calendar className="h-3 w-3" />
+                                    {formatDate(chat.created_at)}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
+                                <Button variant="ghost" size="icon" onClick={() => { setDeleteId(chat.id); setDeleteType('chat'); }} className="text-destructive hover:text-destructive h-8 w-8">
                                   <Trash2 className="h-4 w-4" />
                                 </Button>
-                              </DialogTrigger>
-                              <DialogContent>
-                                <DialogHeader>
-                                  <DialogTitle>Delete Upload</DialogTitle>
-                                </DialogHeader>
-                                <p className="text-muted-foreground">
-                                  Are you sure you want to delete "{upload.filename}"? This action cannot be undone.
-                                </p>
-                                <DialogFooter>
-                                  <Button variant="outline" onClick={() => setDeleteId(null)}>
-                                    Cancel
+                                <Link to="/assistant">
+                                  <Button variant="ghost" size="icon" className="h-8 w-8">
+                                    <ChevronRight className="h-4 w-4" />
                                   </Button>
-                                  <Button
-                                    variant="destructive"
-                                    onClick={handleDelete}
-                                    disabled={deleting}
-                                    data-testid="confirm-delete"
-                                  >
-                                    {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Delete'}
-                                  </Button>
-                                </DialogFooter>
-                              </DialogContent>
-                            </Dialog>
+                                </Link>
+                              </div>
+                            </div>
                           </div>
                         </div>
-
-                        {/* Quick Summary */}
-                        {upload.summary_short?.[0] && (
-                          <p className="text-sm text-muted-foreground mt-2 line-clamp-2">
-                            {upload.summary_short[0]}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        ) : (
-          <Card className="glass-panel border-border/50">
-            <CardContent className="p-8 text-center">
-              <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
-                <FileText className="h-8 w-8 text-muted-foreground" />
+                      </CardContent>
+                    </Card>
+                  ))}
               </div>
-              <h3 className="font-semibold text-foreground mb-2">No uploads yet</h3>
-              <p className="text-muted-foreground mb-4">
-                Upload your first medical document to get started
-              </p>
-              <Link to="/upload">
-                <Button className="rounded-full" data-testid="first-upload-btn">
-                  <Upload className="h-4 w-4 mr-2" />
-                  Upload Document
-                </Button>
-              </Link>
-            </CardContent>
-          </Card>
-        )}
+            ) : (
+              <div className="text-center py-12 bg-muted/20 rounded-2xl border border-dashed border-border/50">
+                <Bot className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-20" />
+                <p className="text-muted-foreground">No chat history found matching your search.</p>
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
+
+        {/* Global Delete Confirmation Dialog */}
+        <Dialog open={!!deleteId} onOpenChange={(open) => !open && setDeleteId(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Delete Entry</DialogTitle>
+            </DialogHeader>
+            <p className="text-muted-foreground">
+              Are you sure you want to delete this {deleteType === 'upload' ? 'document' : 'conversation record'}? This action cannot be undone.
+            </p>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setDeleteId(null)}>Cancel</Button>
+              <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
+                {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Delete'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </Layout>
   );

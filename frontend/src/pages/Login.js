@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Heart, Eye, EyeOff, Loader2, Mail, Lock, Phone } from 'lucide-react';
 import { toast } from 'sonner';
 import { GoogleLogin } from '@react-oauth/google';
+import axios from 'axios';
 import {
   InputOTP,
   InputOTPGroup,
@@ -143,9 +144,15 @@ const Login = () => {
             {/* Google Login Section */}
             <div className="flex justify-center flex-col items-center gap-4">
               <GoogleLogin
-                onSuccess={handleGoogleSuccess}
-                onError={() => toast.error('Google Sign-In failed')}
-                useOneTap
+                onSuccess={(res) => {
+                  console.log("Google Login SUCCESS:", res);
+                  handleGoogleSuccess(res);
+                }}
+                onError={() => {
+                  console.error("Google Login ERROR: This usually means the origin is not authorized or third-party cookies are blocked.");
+                  toast.error('Google Sign-In failed. Check Browser Console (F12) for error details.');
+                }}
+                useOneTap={false}
                 theme="filled_black"
                 shape="pill"
                 width="100%"
